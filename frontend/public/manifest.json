@@ -1,0 +1,14 @@
+{
+  "name": "NER Sentinel — Landslide Early Warning",
+  "short_name": "NER Sentinel",
+  "description": "AI-powered landslide early warning and response coordination for the North Eastern Region.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f8fc",
+  "theme_color": "#0b1f43",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "name": "ner-sentinel-frontend",
+  "version": "1.0.0",
+  "description": "NER Sentinel frontend — talks to the NER Sentinel backend via REST",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

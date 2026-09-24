@@ -1,0 +1,13 @@
+{
+  "name": "ner-sentinel-complete",
+  "version": "1.0.0",
+  "description": "NER Sentinel — backend (real + zero-setup demo server) and frontend in one project. Run with: npm start",
+  "private": true,
+  "scripts": {
+    "start": "node start-demo.js",
+    "demo": "node start-demo.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

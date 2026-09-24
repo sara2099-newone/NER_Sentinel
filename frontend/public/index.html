@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NER Sentinel</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9B%B0%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0b1f43">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ===== LOGIN ===== -->
+<div id="loginScreen" class="login-screen">
+  <div class="login-card">
+    <div class="logo">◈ NER SENTINEL</div>
+    <p class="eyebrow">NORTH EAST INDIA · EARLY WARNING NETWORK</p>
+    <h1>Stay ahead of the slope.</h1>
+    <p class="muted">Choose a workspace to access live risk intelligence.</p>
+    <div class="role-grid">
+      <button class="role-choice selected" data-role="Citizen">👤 <b>Citizen</b><small>Alerts, safety status &amp; reports</small></button>
+      <button class="role-choice" data-role="Official">🏛️ <b>Official</b><small>Command &amp; response coordination</small></button>
+    </div>
+    <form id="authForm">
+      <label>Your name<input id="name" placeholder="e.g. Ananya Das"></label>
+      <label>Email address<input id="email" type="email" required placeholder="you@example.com"></label>
+      <label>Password<input id="password" type="password" required minlength="6" placeholder="At least 6 characters"></label>
+      <button class="btn primary wide" id="authSubmit">Enter citizen workspace →</button>
+    </form>
+    <button id="demoBtn" class="demo">Explore citizen demo without an account</button>
+    <div class="backend-picker">
+      <span>Backend:</span>
+      <select id="loginApiBase"></select>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<!-- ===== EARLY WARNING modal — auto-shown when a zone's real Risk Map
+     data crosses the configured critical threshold. Content is filled
+     from the same computed zone object the Risk Map panel uses; no
+     values are invented here. ===== -->
+<div id="earlyWarningModal" class="modal-overlay hidden">
+  <div class="modal-card warning">
+    <button class="modal-close" id="earlyWarningClose">Close ✕</button>
+    <p class="modal-eyebrow">⚠️ LANDSLIDE WARNING</p>
+    <h2 id="ewTitle">—</h2>
+    <div class="modal-fact-list" id="ewFacts"></div>
+    <p class="modal-note">Generated from this zone's live Risk Map data (rainfall, soil moisture, slope, AI risk model). Nothing here is a placeholder value.</p>
+  </div>
+</div>
+
+<!-- ===== CITIZEN SAFETY ALERT modal — appears for the zone that just
+     crossed critical. Posts a real status to the existing
+     /api/safety/status endpoint (same one the Safety Status page uses)
+     so it shows up for Officials immediately, not just in this modal. ===== -->
+<div id="citizenSafetyModal" class="modal-overlay hidden">
+  <div class="modal-card emergency">
+    <p class="modal-eyebrow">⚠️ LANDSLIDE EMERGENCY</p>
+    <h2 id="csZoneName">Are you safe?</h2>
+    <p class="muted small" id="csSub"></p>
+    <div class="emergency-actions">
+      <button class="btn safe-choice" id="csSafeBtn">✅ I'M SAFE</button>
+      <button class="btn help-choice" id="csHelpBtn">🆘 I NEED HELP</button>
+    </div>
+    <p class="modal-note">Your response is sent to officials with your approximate last-known location — not live GPS tracking. Identified only by an anonymous demo ID (<span id="csDemoId">—</span>) unless you're signed in.</p>
+  </div>
+</div>
+<div id="bootLoader" class="hidden"><div class="boot-spinner"></div><span>Loading live data…</span></div>
+
+<!-- ===== SHELL ===== -->
+<header class="topbar">
+  <a class="brand" href="#" onclick="goHome();return false">◈ <span><b>NER SENTINEL</b><small>LANDSLIDE EARLY WARNING</small></span></a>
+  <nav>
+    <button class="nav active citizen-only" data-page="home">Dashboard</button>
+    <button class="nav official-only" data-page="officialDashboard">Official Dashboard</button>
+    <button class="nav" data-page="map">Risk map</button>
+    <button class="nav" data-page="alerts">Alerts</button>
+    <button class="nav citizen-only" data-page="report">Field report</button>
+    <button class="nav" data-page="safety">Safety status</button>
+    <button class="nav official-only" data-page="official">Command Center</button>
+    <button class="nav" data-page="history">History</button>
+    <button class="nav" data-page="about">About</button>
+  </nav>
+  <div class="actions">
+    <span id="backendModeBadge" title="Which backend this session is talking to"></span>
+    <button id="soundToggle" class="btn ghost small-btn" title="Toggle alert sound">🔊</button>
+    <select id="language"></select>
+    <button id="avatarBtn" class="profile" title="Profile & settings">A</button>
+    <button id="logoutBtn" class="btn ghost small-btn" title="Log out">⏻</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ===== DASHBOARD ===== -->
+<section id="home" class="page active">
+  <article id="citizenWarningBanner" class="citizen-warning hidden" role="status" aria-live="polite"></article>
+  <div class="hero">
+    <div>
+      <p class="eyebrow">LIVE · NORTH EASTERN REGION</p>
+      <h1>Know the risk.<br><em>Move with confidence.</em></h1>
+      <p class="lead">An AI-powered early warning platform for landslide-prone NER zones — combining live weather, satellite rainfall, terrain slope, and a trained ML model into one computed priority score per zone. Nothing below is hardcoded.</p>
+      <div class="hero-actions">
+        <button class="btn primary" onclick="go('map')">Explore live map →</button>
+        <button class="btn ghost citizen-only" onclick="go('report')">Report a hazard</button>
+        <button class="btn ghost" onclick="go('about')">How this works →</button>
+      </div>
+      <div class="trust" id="trustLine">● Connecting…</div>
+      <p class="trust citizen-only hidden" id="citizenLocationLine"></p>
+    </div>
+  </div>
+
+  <article class="surface your-area-card" id="yourAreaCard">
+    <div class="section-top"><div><p class="eyebrow">PERSONALIZED CITIZEN RISK</p><h2>Your landslide risk for a supported NER area</h2></div><button class="btn ghost" id="yourAreaGpsBtn">⌖ Use My Location</button></div>
+    <div class="area-controls"><label>Search supported location<select id="citizenLocationSearch" aria-label="Search supported location"></select></label><button class="btn ghost" id="citizenLocationSearchBtn">Search Location</button></div>
+    <div id="yourAreaContent"><p class="muted small">Use your permitted browser location or select a supported area. Environmental readings and the risk assessment are always from the same existing NER Sentinel data pipeline.</p></div>
+  </article>
+
+  <div class="capability-strip">
+    <div><i class="ti ti-brain"></i><b>AI risk model</b><span>Trained ML prediction per zone</span></div>
+    <div><i class="ti ti-cloud-rain"></i><b>Satellite rainfall</b><span>NASA POWER + Open-Meteo</span></div>
+    <div><i class="ti ti-ruler-2"></i><b>Rule-based thresholds</b><span>Works even if the AI model is down</span></div>
+    <div><i class="ti ti-users"></i><b>Population impact</b><span>5km affected-population estimate</span></div>
+    <div><i class="ti ti-language"></i><b>7-language alerts</b><span>SMS in the region's own languages</span></div>
+    <div><i class="ti ti-camera"></i><b>Field evidence</b><span>Citizen + official photo/video reports</span></div>
+  </div>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="split">
+    <article class="surface">
+      <div class="section-top"><div><p class="eyebrow">REGIONAL PULSE</p><h2>Risk at a glance</h2></div><button class="link" onclick="go('map')">Open map ↗</button></div>
+      <div id="overviewMap" class="map small-map"></div>
+    </article>
+    <article class="surface">
+      <div class="section-top"><div><p class="eyebrow">RANKED BY COMPUTED PRIORITY</p><h2>Act on these first</h2></div><button class="link" onclick="go('alerts')">All alerts</button></div>
+      <div id="alertPreview"></div>
+    </article>
+  </div>
+
+  <div class="split">
+    <article class="surface guidance-card">
+      <div class="section-top"><div><p class="eyebrow">STAY SAFE</p><h2>What to do right now</h2></div></div>
+      <ul class="tip-list">
+        <li>🟢 <b>Low / Moderate zones</b> — no action needed, just keep the app or SMS alerts on.</li>
+        <li>🟠 <b>High risk nearby</b> — avoid the slope area, keep your phone charged, watch for official updates.</li>
+        <li>🔴 <b>Critical risk nearby</b> — move away from the slope now and follow the safe route below.</li>
+        <li>👀 Noticed a crack, unusual water flow, or ground movement? <button class="link" onclick="go('report')">File a quick report →</button></li>
+      </ul>
+    </article>
+    <article class="surface guidance-card">
+      <div class="section-top"><div><p class="eyebrow">QUICK ACTIONS</p><h2>Let people know you're okay</h2></div></div>
+      <p class="muted small" style="margin:0 0 14px">One tap tells officials your status and location — no forms to fill.</p>
+      <div class="quick-actions-grid">
+        <button class="btn ghost" onclick="go('safety')">✅ I'm Safe / 🆘 Need help</button>
+        <button class="btn ghost" onclick="go('map')">🗺️ Check risk near me</button>
+        <button class="btn ghost" onclick="go('report')">📷 Report a hazard</button>
+        <button class="btn ghost" onclick="go('alerts')">🔔 View active alerts</button>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- ===== ABOUT ===== -->
+<section id="about" class="page">
+  <div class="page-intro"><div><p class="eyebrow">FOR EXAMINERS &amp; JUDGES</p><h1>What NER Sentinel does</h1><p>A quick self-guided tour — read this instead of a live walkthrough.</p></div></div>
+
+  <div class="split">
+    <article class="surface">
+      <div class="section-top"><div><p class="eyebrow">CITIZEN ROLE</p><h2>👤 What a citizen can do</h2></div></div>
+      <ul class="feature-list">
+        <li><b>Dashboard / Risk map</b> — see every monitored zone's live computed risk, ranked by priority, with the exact reason each one is flagged.</li>
+        <li><b>Field report</b> — file a hazard report with GPS location and photo/video evidence, sent straight to the official verification queue.</li>
+        <li><b>Safety status</b> — one-tap "I'm Safe" / "I Need Help", visible live to officials, in the citizen's own language.</li>
+        <li><b>History</b> — browse real historical NER landslide events for context on what "high risk" has actually meant here before.</li>
+      </ul>
+    </article>
+    <article class="surface">
+      <div class="section-top"><div><p class="eyebrow">OFFICIAL ROLE</p><h2>🏛️ What an official can do</h2></div></div>
+      <ul class="feature-list">
+        <li><b>Command center</b> — every zone ranked by computed priority, with AI risk, population impact, and road status in one table.</li>
+        <li><b>Report queue</b> — verify or reject citizen reports, and attach the official's own field-verification evidence.</li>
+        <li><b>Needs-help list</b> — a live feed of every citizen who has flagged themselves as needing help, with their last known location.</li>
+        <li><b>Alert trigger</b> — send a real multilingual SMS warning for any zone, in as many of the 7 supported languages as needed.</li>
+      </ul>
+    </article>
+  </div>
+
+  <article class="surface" style="margin-top:18px">
+    <div class="section-top"><div><p class="eyebrow">DATA SOURCES — REAL, NOT SIMULATED</p><h2>Where every number comes from</h2></div></div>
+    <div class="source-grid">
+      <div><b>Weather &amp; rainfall</b><span>Open-Meteo (live forecast + hourly precipitation)</span></div>
+      <div><b>Satellite rainfall</b><span>NASA POWER — public, no-key satellite/reanalysis precipitation</span></div>
+      <div><b>Terrain &amp; slope</b><span>OpenTopoData elevation API</span></div>
+      <div><b>Landslide risk</b><span>Trained ML model, served by our own FastAPI microservice</span></div>
+      <div><b>Historical incidents</b><span>17 real, publicly-reported NER events, 2022–2026</span></div>
+      <div><b>SMS alerts</b><span>Twilio (sends for real once configured; otherwise shows the exact message)</span></div>
+    </div>
+    <p class="muted small" style="margin-top:14px">Two figures are documented approximations, not measured: <b>population estimate</b> (nearest zone's density × area, not a gridded census layer) and <b>road status</b> (a heuristic derived from priority level — no live traffic feed exists for this region). Both are labeled as such everywhere they appear.</p>
+  </article>
+
+  <article class="surface" style="margin-top:18px">
+    <div class="section-top"><div><p class="eyebrow">OFFICIAL WORKSPACE — HOW THE RESPONSE TOOLS WORK</p><h2>Beyond the dashboard</h2></div></div>
+    <ul class="feature-list">
+      <li><b>Real headcount vs. population estimate</b> — the dashboard's population number is a density-based estimate. The Command Center's "Citizens reporting near a zone" is a real, exact count of people who actually used the app or SMS to check in.</li>
+      <li><b>Possibly affected / went quiet</b> — the honest substitute for cell-tower tracking (which needs telecom-carrier access no hackathon can get). It only sees people who have used NER Sentinel at least once, and treats "no update since the event" as a signal to check on them — not proof of anything.</li>
+      <li><b>Reply SAFE / HELP by SMS, no app</b> — a citizen registers their phone once (in Safety Status), then can reply to any alert by plain text. Requires a Twilio number with its webhook pointed at this server's public URL (via ngrok for a local demo) — the code is real and tested, but needs that one setup step to actually receive replies.</li>
+      <li><b>Multi-agency dispatch</b> — Police / Fire / Medical / Disaster Management are separate SMS recipient lists, each read from your own <code>.env</code>. They are never pre-filled with a real public emergency number — you point them at your own team's phones for a demo.</li>
+      <li><b>Responder routing</b> — real road-network routing via OSRM (OpenStreetMap's routing engine), not a straight line on a map. "Low-risk" means the route that stays furthest from other high-risk zones, among OSRM's real alternative routes — it is not live traffic or road-closure data, which doesn't exist as a free source for this region.</li>
+    </ul>
+  </article>
+</section>
+
+
+<!-- ===== MAP ===== -->
+<section id="map" class="page">
+  <div class="page-intro">
+    <div><p class="eyebrow">LOCATION INTELLIGENCE</p><h1>Live landslide risk map</h1><p>Shows supported risk zones, your permitted location when shared, and nearby historical landslide records where coordinates exist.</p></div>
+    <div class="filter"><label>Focus area<select id="locationSelect"></select></label><button id="gpsBtn" class="btn ghost">⌖ My location</button></div>
+  </div>
+  <div class="map-grid">
+    <article class="surface map-shell">
+      <div class="map-toolbar"><span>🔴 Critical</span><span>🟠 High</span><span>🟡 Moderate</span><span>🟢 Low</span><button id="jumpToSafeRouteBtn" class="link citizen-only" style="margin-left:auto">🧭 Find my safe route (GPS)</button><button id="perimeterToggle" class="link">Show 5km perimeter</button><button id="simulateCriticalBtn" class="link">🧪 Simulate critical incident (test)</button></div>
+      <div id="mainMap" class="map main-map"></div>
+    </article>
+    <div>
+      <aside id="riskPanel" class="surface"></aside>
+      <aside id="citizenZoneCard" class="surface citizen-zone-card hidden"></aside>
+    </div>
+  </div>
+
+  <article class="surface action-plan citizen-only">
+    <p class="eyebrow">REAL ROAD ROUTING · OSRM</p>
+    <h2>Safe route — away from the danger zone</h2>
+    <p class="muted small">Uses your GPS to find your nearest monitored zone, then routes you to the nearest zone that ISN'T Critical/High risk — a real road route, not a straight line.</p>
+    <div class="form-row">
+      <button id="safeRouteGpsBtn" class="btn ghost">⌖ Use my location</button>
+      <span id="safeRouteStartLabel" class="muted small">No location set yet</span>
+    </div>
+    <button id="getSafeRouteBtn" class="btn primary">Find safe route</button>
+    <div id="safeRouteMap" class="map route-map"></div>
+    <div id="safeRouteResult"></div>
+  </article>
+</section>
+
+<!-- ===== ALERTS ===== -->
+<section id="alerts" class="page">
+  <div class="page-intro">
+    <div><p class="eyebrow">EARLY WARNING CENTER · LIVE</p><h1>Zones that need attention now</h1><p>Ranked by the computed priority formula (risk score + rule-based critical flag + affected population).</p></div>
+    <div class="live-indicator"><span class="live-dot"></span><span id="alertsLastUpdated">Updating…</span></div>
+  </div>
+  <div id="alertGrid" class="alert-grid"></div>
+</section>
+
+<!-- ===== FIELD REPORT ===== -->
+<section id="report" class="page citizen-only">
+  <div class="page-intro"><div><p class="eyebrow">CITIZEN REPORTING</p><h1>See something unstable?</h1><p>Your report goes straight to the official verification queue.</p></div></div>
+  <div class="split">
+    <form id="reportForm" class="surface report-form">
+      <h2>Submit a hazard report</h2>
+      <label>What did you observe?
+        <select name="type">
+          <option>Crack / ground deformation</option>
+          <option>Slope movement</option>
+          <option>Road blockage</option>
+          <option>Small landslide</option>
+          <option>Heavy water flow</option>
+        </select>
+      </label>
+      <label>Location description<input name="location" id="reportLocationText" value=""></label>
+      <label>Brief description<textarea name="description" required placeholder="Describe what has changed…"></textarea></label>
+      <label>Add photo/video evidence <small class="muted" id="evidenceHint"></small><input id="evidence" type="file" accept="image/*,video/*" multiple></label>
+      <div class="form-row">
+        <button type="button" id="reportGps" class="btn ghost">⌖ Add my GPS</button>
+        <button class="btn primary">Send for review →</button>
+      </div>
+      <div id="reportGpsStatus" class="muted small"></div>
+    </form>
+    <article class="surface">
+      <p class="eyebrow">YOUR REPORTS</p>
+      <h2>Status of what you've sent</h2>
+      <div id="myReports" class="message-list"></div>
+    </article>
+  </div>
+</section>
+
+<!-- ===== SAFETY STATUS ===== -->
+<section id="safety" class="page">
+  <div class="page-intro"><div><p class="eyebrow">CITIZEN SAFETY STATUS</p><h1>Let officials know you're okay</h1><p>One tap. Officials see a live list of everyone who has flagged that they need help — location and headcount included.</p></div></div>
+  <div class="split">
+    <article class="surface citizen-only">
+      <h2>Update your status</h2>
+      <div class="safety-buttons">
+        <button class="btn safe-btn" id="markSafe">✅ I'm Safe</button>
+        <button class="btn help-btn" id="markHelp">🆘 I Need Help</button>
+      </div>
+      <label>Note (optional)<textarea id="safetyNote" placeholder="e.g. trapped near NH-6, road blocked"></textarea></label>
+
+      <div class="gps-row">
+        <button class="btn ghost" id="safetyGps">⌖ Attach my GPS</button>
+        <label class="switch-row"><input type="checkbox" id="watchLocationToggle"> Keep sharing my live location</label>
+      </div>
+      <div id="gpsAccuracy" class="muted small"></div>
+      <div id="pinDropHint" class="notice small hidden">GPS unavailable or denied — tap on the mini-map below to drop a pin at your location instead.</div>
+      <div id="safetyPinMap" class="map safety-pin-map hidden"></div>
+
+      <div id="safetyStatusResult" class="route-status">No status sent yet this session.</div>
+
+      <div class="sms-fallback">
+        <p class="eyebrow">NO-APP FALLBACK</p>
+        <p class="muted small">Register your phone once, and next time you can just <b>reply SAFE or HELP by SMS</b> — no app needed to respond, even offline data-wise.</p>
+        <div class="form-row">
+          <input id="phoneForSms" type="tel" placeholder="+91XXXXXXXXXX">
+          <button class="btn ghost" id="registerPhoneBtn">Register phone</button>
+        </div>
+      </div>
+    </article>
+    <article class="surface official-only">
+      <div class="section-top"><div><p class="eyebrow">LIVE · AUTO-REFRESHING</p><h2>People who need help</h2></div><button class="link" id="refreshNeedsHelp">Refresh now</button></div>
+      <p class="muted small"><span class="legend-dot needhelp"></span>🔴 Need help &nbsp; <span class="legend-dot safe"></span>🟢 Safe &nbsp; <span class="legend-dot noresponse"></span>🟡 No response &nbsp;·&nbsp; <b>LAST KNOWN LOCATION — NOT LIVE MOBILE TRACKING</b></p>
+      <div id="needsHelpMap" class="map needs-help-map"></div>
+      <div id="needsHelpList"></div>
+    </article>
+  </div>
+</section>
+
+<!-- ===== HISTORY ===== -->
+<section id="history" class="page">
+  <div class="page-intro"><div><p class="eyebrow">REAL, PUBLICLY-SOURCED RECORDS</p><h1>Historical landslide incidents</h1><p>Not synthetic data — compiled from public reporting, spanning routine local incidents to the largest NER disasters of the last decade.</p></div>
+    <div class="filter"><label>State<select id="historyState"><option value="">All states</option></select></label><button id="historyNearMeBtn" class="btn ghost">⌖ Sort by nearest to me</button></div>
+  </div>
+  <div id="historyList" class="history-list"></div>
+</section>
+
+<!-- ===== OFFICIAL DASHBOARD (distinct landing page for officials) ===== -->
+<section id="officialDashboard" class="page official-only">
+  <div class="page-intro">
+    <div><p class="eyebrow">OFFICIAL WORKSPACE · RESTRICTED</p><h1>Official command dashboard</h1><p>Everything you asked for, surfaced up front — not buried in a form. Each source is marked LIVE, CACHED, DEMO or UNAVAILABLE.</p></div>
+    <span class="secure" id="officialSessionBadge">● AUTHORISED SESSION</span>
+  </div>
+
+  <div class="stats" id="officialDashStats"></div>
+
+  <article class="surface control-room" aria-label="GIS control room">
+    <div class="section-top"><div><p class="eyebrow">GIS CONTROL ROOM · LIVE ZONE INTELLIGENCE</p><h2>Risk, people &amp; response picture</h2></div><button class="link" onclick="go('map')">Open full risk map ↗</button></div>
+    <p class="muted small">Risk zones and factor values use the current dashboard response. Layer labels distinguish LIVE, CACHED, DEMO and UNAVAILABLE data; no operational information is invented.</p>
+    <div class="control-room-grid">
+      <div>
+        <div class="control-map-toolbar">
+          <label>Focus zone<select id="controlRoomZone"></select></label>
+          <div id="controlRoomLegend" class="risk-legend" aria-label="Risk legend"></div>
+        </div>
+        <div id="officialControlMap" class="map control-room-map"></div>
+        <p class="muted small control-map-note">Colored circles show monitored 5 km zones. Purple points are historical landslides; red points are last-known locations of citizens requesting help.</p>
+      </div>
+      <aside id="controlRoomDetail" class="control-room-detail"></aside>
+    </div>
+  </article>
+
+  <div class="split">
+    <article class="surface">
+      <div class="section-top"><div><p class="eyebrow">TOP PRIORITY ZONES</p><h2>Act on these first</h2></div><button class="link" onclick="go('official');scrollToPanel('panel-priority')">Full table ↗</button></div>
+      <div id="dashTopZones"></div>
+    </article>
+    <article class="surface">
+      <div class="section-top"><div><p class="eyebrow">LIVE · AUTO-REFRESHING</p><h2>Citizens who need help</h2></div><button class="link" onclick="go('safety')">Full list ↗</button></div>
+      <div id="dashNeedsHelpMap" class="map needs-help-map"></div>
+      <div id="dashNeedsHelpSummary"></div>
+    </article>
+  </div>
+
+  <div class="split">
+    <article class="surface">
+      <div class="section-top"><div><p class="eyebrow">LIVE SYSTEM STATUS</p><h2>Data source health</h2></div></div>
+      <div id="systemStatus"></div>
+      <p class="muted small" style="margin-top:10px">Checked on every dashboard load. A source showing "degraded" doesn't break the system — the priority score still computes from whatever sources are live.</p>
+    </article>
+    <article class="surface">
+      <div class="section-top"><div><p class="eyebrow">HOW THE SCORE IS BUILT</p><h2>Priority formula</h2></div></div>
+      <div class="formula-box">
+        <div class="formula-row"><b>55%</b><span>AI risk score</span></div>
+        <div class="formula-row"><b>30%</b><span>Affected population (5km, scaled)</span></div>
+        <div class="formula-row"><b>+15</b><span>Bonus if a hard rule threshold is crossed</span></div>
+      </div>
+      <p class="muted small">0–24 Low · 25–49 Moderate · 50–74 High · 75–100 Critical. Full detail in <button class="link" onclick="go('about')">About →</button></p>
+    </article>
+  </div>
+
+  <div class="page-intro" style="margin-top:34px"><div><p class="eyebrow">EVERYTHING AVAILABLE TO YOU</p><h2 style="font:700 24px Outfit;margin:6px 0">Response tools</h2></div></div>
+  <div class="tool-grid" id="toolTiles"></div>
+
+  <article class="surface" style="margin-top:22px">
+    <div class="section-top"><div><p class="eyebrow">RECENT ACTIVITY</p><h2>Latest alert dispatches</h2></div><button class="link" onclick="go('official');scrollToPanel('panel-alertLog')">Full log ↗</button></div>
+    <div id="dashRecentAlerts"></div>
+  </article>
+</section>
+
+<!-- ===== OFFICIAL COMMAND CENTER ===== -->
+<section id="official" class="page official-only">
+  <div class="page-intro">
+    <div><p class="eyebrow">OFFICIAL WORKSPACE · RESTRICTED</p><h1>Response command center</h1><p>The deep tools behind each dashboard tile — every number below is computed live, nothing is hand-typed.</p></div>
+    <span class="secure">● AUTHORISED SESSION</span>
+  </div>
+  <div id="officialStats" class="stats"></div>
+  <div class="command-grid">
+    <article class="surface" id="panel-priority">
+      <div class="section-top"><div><p class="eyebrow">RANKED BY PRIORITY</p><h2>Zones, worst first</h2></div></div>
+      <div id="priorityTable"></div>
+    </article>
+    <article class="surface" id="panel-queue">
+      <div class="section-top"><div><p class="eyebrow">INCOMING REPORTS</p><h2>Field response queue</h2></div><span class="secure">LIVE</span></div>
+      <div id="officialQueue"></div>
+    </article>
+  </div>
+  <article class="surface action-plan" id="panel-trigger">
+    <p class="eyebrow">MULTILINGUAL SMS ALERT</p>
+    <h2>Trigger a critical alert</h2>
+    <div class="assign-grid">
+      <label>Zone<select id="alertZone"></select></label>
+      <label>Languages<select id="alertLocales" multiple></select></label>
+    </div>
+    <button id="sendAlertBtn" class="btn primary">Send alert</button>
+    <div id="alertResult" class="route-status">No alert sent yet.</div>
+  </article>
+
+  <div class="command-grid">
+    <article class="surface" id="panel-candidate">
+      <div class="section-top"><div><p class="eyebrow">AI + RULES + CITIZEN REPORTS COMBINED</p><h2>Candidate incident detection</h2></div></div>
+      <p class="muted small">Combines the AI risk model, rule-based thresholds, and nearby pending citizen reports into one signal. This never auto-confirms anything — a human always verifies.</p>
+      <div class="assign-grid">
+        <label>Zone<select id="candidateZone"></select></label>
+        <label>&nbsp;<button id="candidateBtn" class="btn ghost">Check for a candidate</button></label>
+      </div>
+      <div id="candidateResult"></div>
+    </article>
+    <article class="surface" id="panel-riskTrend">
+      <div class="section-top"><div><p class="eyebrow">REAL OBSERVED HISTORY</p><h2>Risk trend, last 24h</h2></div></div>
+      <div class="assign-grid">
+        <label>Zone<select id="trendZone"></select></label>
+        <label>&nbsp;<button id="trendBtn" class="btn ghost">Load trend</button></label>
+      </div>
+      <div id="trendChart"></div>
+    </article>
+  </div>
+
+  <div class="command-grid">
+    <article class="surface" id="panel-headcount">
+      <div class="section-top"><div><p class="eyebrow">REAL HEADCOUNT, NOT AN ESTIMATE</p><h2>Citizens reporting near a zone</h2></div></div>
+      <div class="assign-grid">
+        <label>Zone<select id="headcountZone"></select></label>
+        <label>Radius (km)<input id="headcountRadius" type="number" value="5" min="1" max="20"></label>
+      </div>
+      <button id="headcountBtn" class="btn ghost">Get real count</button>
+      <div id="headcountResult"></div>
+      <p class="muted small" style="margin-top:8px">Counts only people who have used NER Sentinel (app or SMS) — not the full population estimate shown on the dashboard.</p>
+    </article>
+    <article class="surface" id="panel-possiblyAffected">
+      <div class="section-top"><div><p class="eyebrow">HONEST SUBSTITUTE FOR CELL-TOWER TRACKING</p><h2>Possibly affected / went quiet</h2></div></div>
+      <p class="muted small">People inside the radius who are flagged Need Help, or haven't checked in since the time below.</p>
+      <div class="assign-grid">
+        <label>Silent since<input id="possiblyAffectedSince" type="datetime-local"></label>
+        <label>&nbsp;<button id="possiblyAffectedBtn" class="btn ghost">Check</button></label>
+      </div>
+      <div id="possiblyAffectedResult"></div>
+    </article>
+  </div>
+
+  <article class="surface action-plan" id="panel-dispatch">
+    <p class="eyebrow">MULTI-AGENCY DISPATCH</p>
+    <h2>Notify police, fire, medical &amp; disaster management</h2>
+    <p class="muted small">Numbers are read from your own <code>.env</code> — never a real public emergency line. See About for setup.</p>
+    <div id="agencyCheckboxes" class="agency-checkboxes"></div>
+    <div class="assign-grid">
+      <label>Zone<select id="dispatchZone"></select></label>
+      <label>Reason<input id="dispatchReason" value="critical rainfall threshold crossed"></label>
+    </div>
+    <button id="dispatchBtn" class="btn primary">Dispatch to selected agencies</button>
+    <div id="dispatchResult" class="route-status">No dispatch sent yet.</div>
+  </article>
+
+  <article class="surface action-plan" id="panel-routing">
+    <p class="eyebrow">REAL ROAD ROUTING · OSRM</p>
+    <h2>Get a responder there — low-risk route</h2>
+    <div class="assign-grid">
+      <label>Responding as<select id="responderType"><option>Police</option><option>Fire Station</option><option>Medical / Ambulance</option><option>Disaster Management</option></select></label>
+      <label>Target zone<select id="routeZone"></select></label>
+    </div>
+    <div class="form-row">
+      <button id="routeGpsBtn" class="btn ghost">⌖ Use my current location</button>
+      <span id="routeStartLabel" class="muted small">No starting point set</span>
+    </div>
+    <button id="getRouteBtn" class="btn primary">Get route</button>
+    <div id="routeMap" class="map route-map"></div>
+    <div id="routeResult"></div>
+  </article>
+
+  <!-- ===== RESPONSE WORKFLOW ===== -->
+  <div class="page-intro" style="margin-top:34px"><div><p class="eyebrow">RESPONSE COORDINATION</p><h2 style="font:700 24px Outfit;margin:6px 0">Department alerts &amp; response teams</h2><p>Everything below marked <b>DEMO / SIMULATED</b> is for testing the response workflow end-to-end — it never sends a real SMS, WhatsApp message, or email. Routing is real (OSRM / OpenStreetMap).</p></div></div>
+
+  <article class="surface action-plan" id="panel-demoControls">
+    <p class="eyebrow">DEMO SIMULATION · OFFICIAL ONLY</p>
+    <h2>Test the response workflow</h2>
+    <div class="demo-controls-grid">
+      <div class="demo-control">
+        <label>Zone<select id="simZoneSelect"></select></label>
+        <button id="triggerCriticalBtn" class="btn ghost">⚠ Trigger Critical Risk</button>
+        <button id="triggerLandslideBtn" class="btn primary">🏔 Trigger Landslide</button>
+      </div>
+      <div class="demo-control">
+        <button id="generateCitizensBtn" class="btn ghost">👥 Generate Demo Citizens</button>
+        <button id="generateHelpBtn" class="btn ghost">🆘 Generate Help Requests</button>
+      </div>
+    </div>
+    <div id="demoControlsResult" class="route-status">No simulation run yet this session.</div>
+  </article>
+
+  <article class="surface" id="panel-deptAlerts">
+    <div class="section-top"><div><p class="eyebrow">DEMO DISPATCH · 8 DEPARTMENTS</p><h2>Department alerts</h2></div><button class="link" id="refreshIncidentsBtn">Refresh</button></div>
+    <p class="muted small">Created automatically when a landslide is triggered above. Status: <b>SENT → ACKNOWLEDGED → RESPONDING → RESOLVED</b>. No real SMS/WhatsApp/email is sent — this is a demo dispatch log.</p>
+    <div id="responseIncidentList"></div>
+  </article>
+
+  <article class="surface" id="panel-responseTeams">
+    <div class="section-top"><div><p class="eyebrow">DEMO ROSTER · REAL ROUTING ON DISPATCH</p><h2>Response teams</h2></div><label style="margin:0;width:220px">Zone<select id="teamsZoneSelect"></select></label></div>
+    <p class="muted small">Team locations are simulated starting points, not GPS-tracked vehicles. Tap <b>Dispatch</b> to assign a team to an active incident — this computes a real OSRM road route.</p>
+    <div id="responseTeamsTable" class="teams-table"></div>
+  </article>
+
+  <article class="surface action-plan" id="panel-responseRoute">
+    <p class="eyebrow">ACTUAL ROAD ROUTING · OSRM</p>
+    <h2>Team route — shortest vs. low-risk</h2>
+    <p class="muted small" id="responseRouteHint">Dispatch a team above to see its real route here.</p>
+    <div id="responseRouteMap" class="map route-map hidden"></div>
+    <div id="responseRouteCards" class="route-compare"></div>
+    <div id="responseTeamStatusRow" class="status-progress"></div>
+  </article>
+
+  <div class="command-grid">
+    <article class="surface" id="panel-smsSimulate">
+      <div class="section-top"><div><p class="eyebrow">DEMO THE "NO-APP" REPLY FLOW</p><h2>Simulate an incoming SMS reply</h2></div></div>
+      <p class="muted small">Runs the exact same processing code as a real Twilio text — this button exists because receiving a <i>real</i> SMS reply needs a public webhook URL (ngrok), which isn't available in every demo environment. What happens here is not faked.</p>
+      <div class="assign-grid">
+        <label>From phone<input id="simPhone" value="+919111122222"></label>
+        <label>Message body<input id="simBody" value="HELP, trapped near the slope"></label>
+      </div>
+      <button id="simSmsBtn" class="btn ghost">Simulate incoming SMS</button>
+      <div id="simSmsResult" class="route-status">No simulated message sent yet.</div>
+    </article>
+    <article class="surface" id="panel-alertLog">
+      <div class="section-top"><div><p class="eyebrow">MAKES AUTO-ALERTS VISIBLE</p><h2>Alert activity log</h2></div><button class="link" id="refreshAlertLog">Refresh</button></div>
+      <p class="muted small">Every dispatch — automatic (threshold crossed) or manual — appears here, so "the system warned officials automatically" is something you can point at, not just take on faith.</p>
+      <div id="alertLogList"></div>
+    </article>
+  </div>
+</section>
+
+<!-- ===== PROFILE / SETTINGS ===== -->
+<section id="profile" class="page">
+  <div class="page-intro"><div><p class="eyebrow">ACCOUNT</p><h1>Profile &amp; settings</h1></div></div>
+  <div class="split">
+    <article class="surface profile-card">
+      <div class="profile-avatar" id="profileInitial">A</div>
+      <h2 id="profileName">Citizen</h2>
+      <p id="profileEmail" class="muted">—</p>
+      <span class="secure" id="profileRoleBadge">CITIZEN ACCOUNT</span>
+    </article>
+    <article class="surface settings-card">
+      <div class="setting">
+        <div><b>Language</b><p>Applies to risk/priority/safety labels and SMS alert text.</p></div>
+        <select id="settingsLanguage"></select>
+      </div>
+      <div class="setting">
+        <div><b>Backend</b><p>Switch between the zero-setup demo server and the full production backend.</p></div>
+        <select id="settingsApiBase"></select>
+      </div>
+      <div id="localeReviewNote" class="notice small"></div>
+    </article>
+  </div>
+</section>
+
+</main>
+<footer>Demo prototype for SIH · Historical/live data is real where noted; some figures (population, road status) are documented approximations — see each panel's note.</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
