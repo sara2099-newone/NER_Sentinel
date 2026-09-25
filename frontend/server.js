@@ -1,15 +1,10 @@
-// Plain static file server for the frontend — no framework, no build
-// step, no npm install. The frontend talks to the backend (real
-// server.js on :5000, or the zero-setup demoServer.js on :5050)
-// entirely client-side via fetch(); this file's only job is serving
-// the static HTML/CSS/JS.
-
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
 
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC = path.join(__dirname, "public");
+const BACKEND_PORT = process.env.BACKEND_PORT || 5050;
 
 const MIME = {
     ".html": "text/html; charset=utf-8",
@@ -20,6 +15,22 @@ const MIME = {
 };
 
 const server = http.createServer((req, res) => {
+    if (req.url.startsWith("/api")) {
+        const proxyReq = http.request(
+            { hostname: "localhost", port: BACKEND_PORT, path: req.url, method: req.method, headers: req.headers },
+            (proxyRes) => {
+                res.writeHead(proxyRes.statusCode, proxyRes.headers);
+                proxyRes.pipe(res, { end: true });
+            }
+        );
+        proxyReq.on("error", (err) => {
+            res.writeHead(502, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ message: "Backend unreachable: " + err.message }));
+        });
+        req.pipe(proxyReq, { end: true });
+        return;
+    }
+
     let file = req.url === "/" ? "/index.html" : req.url.split("?")[0];
     file = path.normalize(path.join(PUBLIC, file));
 
@@ -40,7 +51,5 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, () => {
     console.log(`\nNER Sentinel frontend running at http://localhost:${PORT}`);
-    console.log(`It talks to a backend via fetch() — start one of:`);
-    console.log(`  cd ../backend && node demoServer.js     (zero setup, port 5050 — default)`);
-    console.log(`  cd ../backend && npm install && node server.js   (full backend, port 5000)\n`);
+    console.log(`Proxying /api/* requests to backend on port ${BACKEND_PORT}\n`);
 });
