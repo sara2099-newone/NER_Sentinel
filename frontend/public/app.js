@@ -293,7 +293,7 @@ function marker(map, z) {
 function mapOverview() {
     if (S.maps.over || !S.zones.length) return;
     const m = (S.maps.over = L.map("overviewMap", { zoomControl: false, attributionControl: false }).setView([25.7, 92.5], 6));
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", { attribution: "© OpenStreetMap contributors © CARTO", maxZoom: 19 }).addTo(m);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "&copy; OpenStreetMap contributors", maxZoom: 19 }).addTo(m);
     S.zones.forEach((z) => marker(m, z));
 }
 
@@ -304,7 +304,7 @@ function mapMain() {
         return;
     }
     const m = (S.maps.main = L.map("mainMap").setView([25.7, 92.5], 6));
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", { attribution: "© OpenStreetMap contributors © CARTO", maxZoom: 19 }).addTo(m);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "&copy; OpenStreetMap contributors", maxZoom: 19 }).addTo(m);
     S.zones.forEach((z) => marker(m, z));
     select(S.selectedZoneId || S.zones[0].zoneId);
     renderPersonalLocationOnMap();
@@ -923,7 +923,7 @@ function renderNeedsHelp(list) {
     if ($("needsHelpMap")) {
         if (!needsHelpMapInstance) {
             needsHelpMapInstance = L.map("needsHelpMap").setView([25.7, 92.5], 6);
-            L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", { attribution: "© OpenStreetMap contributors © CARTO", maxZoom: 19 }).addTo(needsHelpMapInstance);
+            L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "&copy; OpenStreetMap contributors", maxZoom: 19 }).addTo(needsHelpMapInstance);
         }
         needsHelpMapInstance.eachLayer((layer) => {
             if (layer instanceof L.Marker) needsHelpMapInstance.removeLayer(layer);
@@ -947,7 +947,7 @@ function renderNeedsHelpPreview(list) {
     if (!$("dashNeedsHelpMap")) return;
     if (!dashNeedsHelpMapInstance) {
         dashNeedsHelpMapInstance = L.map("dashNeedsHelpMap").setView([25.7, 92.5], 6);
-        L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", { attribution: "© OpenStreetMap contributors © CARTO", maxZoom: 19 }).addTo(dashNeedsHelpMapInstance);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "&copy; OpenStreetMap contributors", maxZoom: 19 }).addTo(dashNeedsHelpMapInstance);
     } else {
         dashNeedsHelpMapInstance.invalidateSize();
     }
@@ -1531,7 +1531,7 @@ function initRoutingPanel() {
         routeLayers = [];
 
         if (!routeMapInstance._hasTileLayer) {
-            L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", { attribution: "© OpenStreetMap contributors © CARTO", maxZoom: 19 }).addTo(routeMapInstance);
+            L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "&copy; OpenStreetMap contributors", maxZoom: 19 }).addTo(routeMapInstance);
             routeMapInstance._hasTileLayer = true;
         }
 
@@ -1756,7 +1756,7 @@ function renderResponseRoute(team) {
     else responseRouteLayers.forEach((x) => responseRouteMapInstance.removeLayer(x));
     responseRouteLayers = [];
     if (!responseRouteMapInstance._hasTileLayer) {
-        L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", { attribution: "© OpenStreetMap contributors © CARTO", maxZoom: 19 }).addTo(responseRouteMapInstance);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "&copy; OpenStreetMap contributors", maxZoom: 19 }).addTo(responseRouteMapInstance);
         responseRouteMapInstance._hasTileLayer = true;
     }
     const drawLine = (r, isRecommended) => {
@@ -2038,7 +2038,7 @@ function renderOfficialControlRoom() {
     controlRoomDetail(focused);
     if (!officialControlMap) {
         officialControlMap = L.map("officialControlMap", { zoomControl: true }).setView([focused.lat, focused.lng], 7);
-        L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", { attribution: "© OpenStreetMap contributors © CARTO", maxZoom: 19 }).addTo(officialControlMap);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "&copy; OpenStreetMap contributors", maxZoom: 19 }).addTo(officialControlMap);
         $("controlRoomZone").onchange = (event) => { S.controlRoomZoneId = event.target.value; renderOfficialControlRoom(); };
     }
     officialControlLayers.forEach((layer) => officialControlMap.removeLayer(layer));
@@ -2317,7 +2317,7 @@ function initSafeRoutePanel() {
             else routeLayers.forEach((l) => routeMapInstance.removeLayer(l));
             routeLayers = [];
             if (!routeMapInstance._hasTileLayer) {
-                L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", { attribution: "© OpenStreetMap contributors © CARTO", maxZoom: 19 }).addTo(routeMapInstance);
+                L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "&copy; OpenStreetMap contributors", maxZoom: 19 }).addTo(routeMapInstance);
                 routeMapInstance._hasTileLayer = true;
             }
             data.routes.forEach((r) => {
@@ -2434,7 +2434,7 @@ const AudioAlert = (() => {
 function initPinMap(containerId, onPick) {
     const center = S.zones[0] ? [S.zones[0].lat, S.zones[0].lng] : [25.7, 92.5];
     const map = L.map(containerId).setView(center, 7);
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", { attribution: "© OpenStreetMap contributors © CARTO", maxZoom: 19 }).addTo(map);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "&copy; OpenStreetMap contributors", maxZoom: 19 }).addTo(map);
     let marker = null;
     map.on("click", (e) => {
         if (marker) map.removeLayer(marker);
