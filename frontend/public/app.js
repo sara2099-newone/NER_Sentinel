@@ -66,7 +66,7 @@ async function flushOfflineQueue() {
 
 // ---- config ----
 const API_BASES = [
-    { value: "http://localhost:5050", label: "Demo backend — zero setup (port 5050)" },
+    { value: "", label: "Demo backend — zero setup" },
     { value: "http://localhost:5000", label: "Full backend — MongoDB + auth (port 5000)" }
 ];
 
